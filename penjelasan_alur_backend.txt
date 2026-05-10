@@ -1,0 +1,205 @@
+PENJELASAN ALUR BACKEND DONASI
+
+Backend ini dibuat menggunakan bahasa Go dengan framework Fiber sebagai HTTP server.
+Database yang digunakan adalah PostgreSQL, dan akses database dilakukan menggunakan GORM.
+
+
+1. FILE main.go
+
+File main.go adalah titik awal aplikasi dijalankan.
+
+Alurnya:
+- Program memanggil ConnectDB() untuk menyambungkan aplikasi ke database PostgreSQL.
+- Setelah database berhasil tersambung, program membuat repository donasi.
+- Repository tersebut dikirim ke controller agar controller bisa mengakses data donasi.
+- Program membuat aplikasi Fiber dengan fiber.New().
+- Middleware logger dipasang menggunakan logger.New().
+  Logger ini berfungsi untuk menampilkan log setiap request yang masuk, seperti method,
+  path, status response, dan waktu proses request.
+- Middleware CORS dipasang agar backend bisa diakses dari frontend.
+- Route donasi didaftarkan melalui SetupDonasiRoutes().
+- Server dijalankan pada port 8080 dengan app.Listen(":8080").
+
+Jadi, main.go bertugas menyiapkan database, controller, middleware, route, dan server.
+
+
+2. FILE database.go
+
+File database.go berisi konfigurasi koneksi database.
+
+Alurnya:
+- Variabel global DB disiapkan untuk menyimpan koneksi database.
+- Fungsi ConnectDB() membuat koneksi ke PostgreSQL menggunakan GORM.
+- DSN berisi alamat database, username, password, host, port, dan nama database.
+- Jika koneksi gagal, program akan menampilkan pesan error dan berhenti.
+- Jika koneksi berhasil, program menampilkan pesan "Database Connected Successfully!".
+
+Koneksi DB ini kemudian digunakan oleh repository untuk menjalankan query.
+
+
+3. FILE models.go
+
+File models.go berisi struktur data Donation.
+
+Model Donation mewakili tabel donasi di database.
+
+Field yang tersedia:
+- IDDonasi: primary key dengan kolom database id_donasi.
+- NamaDonatur: nama orang yang berdonasi.
+- Nominal: jumlah donasi.
+- TanggalDonasi: tanggal donasi dilakukan.
+- MetodePembayaran: metode pembayaran donasi.
+- Status: status donasi.
+
+Tag json digunakan agar response dan request body memakai nama field JSON yang sesuai.
+Tag gorm digunakan untuk memberi instruksi ke GORM, misalnya primary key dan nama kolom.
+
+Fungsi MigrateDonations() digunakan untuk melakukan AutoMigrate model Donation ke database.
+
+
+4. FILE repository.go
+
+File repository.go berisi semua proses akses data ke database.
+
+Repository bertugas memisahkan logic database dari controller.
+Controller tidak langsung menulis query database, tetapi memanggil fungsi repository.
+
+Fungsi yang tersedia:
+- GetAllDonations()
+  Mengambil semua data donasi dari database.
+
+- GetDonationByID(id_donasi int)
+  Mengambil satu data donasi berdasarkan id_donasi.
+
+- CreateDonation(donation *Donation)
+  Menambahkan data donasi baru ke database.
+
+- UpdateDonation(donation *Donation)
+  Mengubah data donasi berdasarkan id yang ada pada model donation.
+
+- DeleteDonation(id_donasi int)
+  Menghapus data donasi berdasarkan id_donasi.
+
+Repository menggunakan DB dari GORM untuk menjalankan operasi Find, First, Create, Updates,
+dan Delete.
+
+
+5. FILE controller_donasi.go
+
+File controller_donasi.go berisi handler untuk setiap endpoint donasi.
+
+Controller menerima request dari client, membaca parameter atau body request,
+melakukan validasi, lalu memanggil repository.
+
+Fungsi controller:
+
+- GetAllDonations(ctx *fiber.Ctx)
+  Mengambil semua donasi melalui repository.
+  Jika berhasil, mengembalikan response status 200 berisi data donasi.
+  Jika gagal, mengembalikan response status 500.
+
+- GetDonationByID(ctx *fiber.Ctx)
+  Mengambil parameter id dari URL.
+  Jika id tidak valid, mengembalikan status 400.
+  Jika data ditemukan, mengembalikan status 200.
+  Jika data tidak ditemukan, mengembalikan status 404.
+
+- CreateDonation(ctx *fiber.Ctx)
+  Membaca JSON dari body request menggunakan BodyParser().
+  Setelah itu controller melakukan validasi:
+  nama donatur tidak boleh kosong, nominal harus lebih dari 0, tanggal wajib diisi,
+  metode pembayaran wajib diisi, dan status wajib diisi.
+  Jika valid, data disimpan melalui repository.
+  Jika berhasil, mengembalikan status 201.
+
+- UpdateDonation(ctx *fiber.Ctx)
+  Mengambil id dari URL dan membaca body request.
+  Data divalidasi seperti proses create.
+  Jika valid, data diperbarui melalui repository.
+  Jika berhasil, mengembalikan status 200.
+
+- DeleteDonation(ctx *fiber.Ctx)
+  Mengambil id dari URL.
+  Jika id valid, repository akan menghapus data dari database.
+  Jika berhasil, mengembalikan status 200 dengan pesan berhasil.
+
+Controller menggunakan fiber.Map untuk membuat response JSON.
+
+
+6. FILE routes.go
+
+File routes.go berisi daftar route atau endpoint API.
+
+Semua endpoint donasi dikelompokkan dalam prefix:
+/donations
+
+Daftar endpoint:
+
+- GET /donations/
+  Mengambil semua data donasi.
+
+- GET /donations/:id
+  Mengambil satu data donasi berdasarkan id.
+
+- POST /donations/
+  Menambahkan data donasi baru.
+
+- PUT /donations/:id
+  Mengubah data donasi berdasarkan id.
+
+- DELETE /donations/:id
+  Menghapus data donasi berdasarkan id.
+
+Setiap route diarahkan ke fungsi controller yang sesuai.
+
+
+7. ALUR REQUEST SECARA UMUM
+
+Contoh alur saat client menambahkan donasi baru:
+
+1. Client mengirim request POST ke /donations/ dengan body JSON.
+2. Request masuk ke aplikasi Fiber.
+3. Middleware logger mencatat request tersebut.
+4. Middleware CORS memeriksa izin akses dari client.
+5. Route /donations/ mengarahkan request ke CreateDonation().
+6. Controller membaca body request menggunakan BodyParser().
+7. Controller melakukan validasi data.
+8. Jika data valid, controller memanggil repository CreateDonation().
+9. Repository menyimpan data ke PostgreSQL menggunakan GORM.
+10. Repository mengembalikan hasil ke controller.
+11. Controller mengirim response JSON ke client.
+
+
+8. RINGKASAN ALUR BACKEND
+
+Client
+  -> Fiber Server
+  -> Middleware Logger dan CORS
+  -> Routes
+  -> Controller
+  -> Repository
+  -> GORM
+  -> PostgreSQL Database
+
+Setelah database memberikan hasil, alurnya kembali:
+
+PostgreSQL Database
+  -> GORM
+  -> Repository
+  -> Controller
+  -> Response JSON
+  -> Client
+
+
+9. FUNGSI LOGGER
+
+Logger digunakan untuk membantu developer melihat aktivitas request pada terminal.
+
+Contoh informasi yang biasanya ditampilkan:
+- Method request, seperti GET, POST, PUT, DELETE.
+- Path endpoint yang diakses.
+- Status code response.
+- Waktu yang dibutuhkan untuk memproses request.
+
+Dengan logger, proses debugging menjadi lebih mudah karena setiap request yang masuk
+dapat dipantau langsung dari terminal.
